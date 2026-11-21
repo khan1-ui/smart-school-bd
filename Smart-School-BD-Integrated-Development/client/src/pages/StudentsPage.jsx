@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Plus, RefreshCw, FileCheck2, Users } from "lucide-react";
 import { api } from "../lib/api";
 import FaceRegistrationModal from "../components/FaceRegistrationModal";
+import { parseBanglaInteger, normalizeBanglaDigits } from "../lib/banglaInput";
 
 const initial = {
   admissionNumber: "", name: "", gender: "male", dateOfBirth: "",
@@ -45,7 +46,7 @@ export default function StudentsPage() {
   const createStudent = async (e) => {
     e.preventDefault(); setBusy(true); setError(""); setNotice("");
     try {
-      const payload = { ...form, rollNumber: Number(form.rollNumber), dateOfBirth: form.dateOfBirth || null };
+      const payload = { ...form, rollNumber: parseBanglaInteger(form.rollNumber), academicYear: normalizeBanglaDigits(form.academicYear), dateOfBirth: form.dateOfBirth || null };
       const { data } = await api.post("/students", payload);
       setNotice(`শিক্ষার্থী ${data.data.student.name} সফলভাবে নিবন্ধিত হয়েছে। Face Registration-এর আগে অভিভাবকের সম্মতি রেকর্ড করতে হবে।`);
       setForm(initial); setShowForm(false); await load();
@@ -57,14 +58,14 @@ export default function StudentsPage() {
     const className = window.prompt("নতুন শ্রেণি লিখুন:", student.className);
     if (className === null || !className.trim()) return;
     const rollText = window.prompt("নতুন রোল নম্বর লিখুন:", String(student.rollNumber));
-    if (rollText === null || !/^\d+$/.test(rollText) || Number(rollText) < 1) return;
+    if (rollText === null || !Number.isInteger(parseBanglaInteger(rollText)) || parseBanglaInteger(rollText) < 1) return;
     const academicYear = window.prompt("নতুন শিক্ষাবর্ষ লিখুন (যেমন 2027):", String(new Date().getFullYear() + 1));
-    if (academicYear === null || !/^\d{4}(-\d{4})?$/.test(academicYear)) return;
+    if (academicYear === null || !/^\d{4}(-\d{4})?$/.test(normalizeBanglaDigits(academicYear))) return;
     setBusy(true); setError(""); setNotice("");
     try {
       await api.patch(`/students/${student._id}`, {
         className: className.trim(),
-        rollNumber: Number(rollText),
+        rollNumber: parseBanglaInteger(rollText),
         academicYear,
       });
       setNotice(`${student.name}-এর শ্রেণি/রোল/শিক্ষাবর্ষ আপডেট হয়েছে। Student ID অপরিবর্তিত রাখা হয়েছে।`);
