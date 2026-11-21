@@ -1,0 +1,308 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: "Noto Sans Bengali", "Hind Siliguri", system-ui, sans-serif;
+  color: #17352a;
+  background: #f4f8f5;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* বাংলাদেশের জাতীয় পতাকার রঙ */
+  --flag-green: #006a4e;
+  --flag-green-dark: #07553f;
+  --flag-green-light: #e2f3eb;
+  --flag-red: #f42a41;
+
+  /* UI colors */
+  --page-bg: #f4f8f5;
+  --surface: #ffffff;
+  --text-primary: #17352a;
+  --text-muted: #64756e;
+  --border-color: #dce9e0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--page-bg);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled {
+  cursor: not-allowed;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(0, 106, 78, 0.28);
+  outline-offset: 2px;
+}
+
+::selection {
+  color: #ffffff;
+  background: var(--flag-green);
+}
+
+@layer base {
+  body {
+    @apply antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply tracking-tight;
+  }
+}
+
+@layer components {
+  /* Sidebar navigation */
+  .nav-item {
+    @apply flex w-full items-center gap-3 rounded-xl px-3 py-3
+      text-left text-sm font-medium text-slate-600 transition-colors
+      hover:bg-brand-50 hover:text-brand-900;
+  }
+
+  .nav-item-active {
+    @apply bg-brand-50 font-semibold text-brand-700;
+    box-shadow: inset 3px 0 0 var(--flag-red);
+  }
+
+  /* Icon buttons */
+  .icon-button {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-xl
+      text-slate-500 transition-colors
+      hover:bg-slate-100 hover:text-slate-800;
+  }
+
+  /* Inputs and dropdowns */
+  .field {
+    @apply w-full min-w-0 rounded-xl border border-slate-200
+      bg-white px-3 py-2.5 text-sm text-slate-700
+      outline-none transition-colors
+      placeholder:text-slate-400
+      focus:border-brand-600 focus:ring-4 focus:ring-brand-100;
+  }
+
+  .field:disabled {
+    @apply cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400;
+  }
+
+  .field option {
+    color: var(--text-primary);
+    background: var(--surface);
+  }
+
+  /* Primary and secondary buttons */
+  .primary-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl
+      bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white
+      transition-colors hover:bg-brand-900
+      disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .secondary-button {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl
+    border border-slate-200 bg-white px-3 py-2.5
+    text-sm font-semibold text-slate-600 transition-colors
+    hover:border-slate-300 hover:bg-slate-50;
+}
+
+  /* Geographic filter panel */
+  .filter-panel {
+    @apply mb-4 rounded-xl border border-slate-200
+      bg-emerald-50/30 p-4;
+  }
+
+  .filter-heading {
+    @apply mb-3 flex flex-wrap items-center justify-between gap-2
+      text-sm font-semibold text-brand-900;
+  }
+
+  .geo-grid {
+    @apply grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4;
+  }
+
+  .geo-field {
+    @apply block min-w-0;
+  }
+
+  .geo-field label {
+    @apply mb-1.5 block text-xs font-semibold text-slate-600;
+  }
+
+  .geo-field select {
+    @apply w-full min-w-0 rounded-xl border border-slate-200
+      bg-white px-3 py-2.5 text-sm text-slate-700
+      outline-none transition-colors
+      focus:border-brand-600 focus:ring-4 focus:ring-brand-100;
+  }
+
+  .geo-field select:disabled {
+    @apply cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400;
+  }
+
+  /* Table container */
+  .table-container {
+    @apply w-full overflow-x-auto rounded-xl border border-slate-100;
+  }
+
+  /* Status labels */
+  .status-success {
+    @apply rounded-full bg-emerald-50 px-2.5 py-1
+      text-xs font-semibold text-emerald-800;
+  }
+
+  .status-warning {
+    @apply rounded-full bg-amber-50 px-2.5 py-1
+      text-xs font-semibold text-amber-800;
+  }
+
+  .status-danger {
+    @apply rounded-full bg-rose-50 px-2.5 py-1
+      text-xs font-semibold text-rose-800;
+  }
+}
+
+/* Scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #b8cec2 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: 20px;
+  background: #b8cec2;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--flag-green);
+}
+
+/* Small mobile screens */
+@media (max-width: 639px) {
+  .filter-panel {
+    padding: 12px;
+  }
+
+  .filter-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .secondary-button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Smart School BD — Flag Green & Red Cards */
+
+.flag-card {
+  background: #07553f;
+  color: #ffffff;
+  border: 1px solid #07553f;
+  border-top: 4px solid #f42a41;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 4px 14px rgba(7, 85, 63, 0.08);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.flag-card:hover {
+  box-shadow: 0 8px 22px rgba(7, 85, 63, 0.14);
+}
+
+.flag-card h2,
+.flag-card h3,
+.flag-card strong {
+  color: #ffffff;
+}
+
+.flag-card p,
+.flag-card .card-description {
+  color: #d5eee4;
+}
+
+.flag-card .card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.flag-card .card-value {
+  color: #ffffff;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.flag-card .card-muted {
+  color: #d5eee4;
+}
+
+.flag-card .secondary-button {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.flag-card .secondary-button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flag-card {
+    transition: none;
+  }
+}
