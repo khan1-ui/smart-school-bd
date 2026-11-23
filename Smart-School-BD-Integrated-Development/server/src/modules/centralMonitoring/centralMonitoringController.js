@@ -14,44 +14,126 @@ const dateStart = (value) => {
 
 const overview = async (req, res, next) => {
   try {
-    const todayString = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-    const today = dateStart(req.query.date || todayString);
-    if (!today) return res.status(400).json({ success: false, message: "Date must use YYYY-MM-DD format" });
-    const [schoolCount, activeStudents, sessions, schools] = await Promise.all([
-      School.countDocuments({ status: "active" }),
-      Student.countDocuments({ status: "active" }),
-      AttendanceSession.find({ date: today }).select("schoolId className section status submittedAt").lean(),
-      School.find({ status: "active" }).select("name schoolCode division district upazila institutionType").lean(),
+    const todayString = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Dhaka", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date());
+    const requestedDate = req.query.date || todayString;
+    const selectedDate = dateStart(requestedDate);
+    if (!selectedDate) {
+      return res.status(400).json({ success: false, message: "Date must use YYYY-MM-DD format" });
+    }
+
+    const [schools, studentCounts, sessions] = await Promise.all([
+      School.find({ status: "active" })
+        .select("name schoolCode division district upazila institutionType")
+        .lean(),
+      Student.aggregate([
+        { $match: { status: "active" } },
+        { $group: { _id: "$schoolId", count: { $sum: 1 } } },
+      ]),
+      AttendanceSession.find({ date: selectedDate })
+        .select("schoolId className section academicYear status submittedAt")
+        .lean(),
     ]);
-    const schoolIds = schools.map((s) => s._id);
-    const records = await Attendance.aggregate([
-      { $match: { date: today, schoolId: { $in: schoolIds } } },
-      { $group: { _id: "$status", count: { $sum: 1 } } },
-    ]);
-    const attendanceCounts = { present: 0, absent: 0, late: 0 };
-    records.forEach((r) => { attendanceCounts[r._id] = r.count; });
-    const submitted = sessions.filter((s) => ["submitted", "finalized"].includes(s.status)).length;
-    const finalized = sessions.filter((s) => s.status === "finalized").length;
-    const schoolsWithSessions = new Set(sessions.map((s) => String(s.schoolId))).size;
+
+    const schoolIds = schools.map((school) => school._id);
+    const studentCountBySchool = new Map(
+      studentCounts.map((item) => [String(item._id), item.count])
+    );
+    const eligibleSessions = sessions.filter((session) =>
+      ["submitted", "finalized"].includes(session.status)
+    );
+
+    // Only count records belonging to sessions that have actually been submitted.
+    // In-progress and returned sessions must never appear as final attendance.
+    const submittedScopes = eligibleSessions.map((session) => ({
+      schoolId: session.schoolId,
+      className: session.className,
+      section: session.section || "",
+      academicYear: session.academicYear,
+      date: selectedDate,
+    }));
+    const attendanceRows = submittedScopes.length
+      ? await Attendance.aggregate([
+          { $match: { $or: submittedScopes, status: { $in: ["present", "absent"] } } },
+          { $group: { _id: { schoolId: "$schoolId", status: "$status" }, count: { $sum: 1 } } },
+        ])
+      : [];
+
+    const attendanceBySchool = new Map();
+    attendanceRows.forEach((row) => {
+      const schoolId = String(row._id.schoolId);
+      const counts = attendanceBySchool.get(schoolId) || { present: 0, absent: 0 };
+      counts[row._id.status] = row.count;
+      attendanceBySchool.set(schoolId, counts);
+    });
+
+    const sessionsBySchool = new Map();
+    sessions.forEach((session) => {
+      const key = String(session.schoolId);
+      const rows = sessionsBySchool.get(key) || [];
+      rows.push(session);
+      sessionsBySchool.set(key, rows);
+    });
+
     const schoolRows = schools.map((school) => {
-      const schoolSessions = sessions.filter((s) => String(s.schoolId) === String(school._id));
+      const key = String(school._id);
+      const schoolSessions = sessionsBySchool.get(key) || [];
+      const submittedSchoolSessions = schoolSessions.filter((session) =>
+        ["submitted", "finalized"].includes(session.status)
+      );
+      const attendance = attendanceBySchool.get(key);
+      const hasSubmittedAttendance = submittedSchoolSessions.length > 0;
       return {
-        id: String(school._id), name: school.name, schoolCode: school.schoolCode,
-        division: school.division, district: school.district, upazila: school.upazila,
+        id: key,
+        name: school.name,
+        schoolCode: school.schoolCode,
+        division: school.division,
+        district: school.district,
+        upazila: school.upazila,
         institutionType: school.institutionType,
+        registeredStudents: studentCountBySchool.get(key) || 0,
+        present: hasSubmittedAttendance ? (attendance?.present || 0) : null,
+        absent: hasSubmittedAttendance ? (attendance?.absent || 0) : null,
+        attendanceAvailable: hasSubmittedAttendance,
         sessionCount: schoolSessions.length,
-        submittedCount: schoolSessions.filter((s) => ["submitted", "finalized"].includes(s.status)).length,
-        finalizedCount: schoolSessions.filter((s) => s.status === "finalized").length,
+        submittedCount: submittedSchoolSessions.length,
+        finalizedCount: schoolSessions.filter((session) => session.status === "finalized").length,
+        pendingCount: schoolSessions.filter((session) => !["submitted", "finalized"].includes(session.status)).length,
         status: schoolSessions.length === 0 ? "not_started" :
-          schoolSessions.every((s) => ["submitted", "finalized"].includes(s.status)) ? "submitted" : "in_progress",
+          schoolSessions.every((session) => ["submitted", "finalized"].includes(session.status)) ? "submitted" : "in_progress",
       };
     });
-    res.json({ success: true, data: {
-      date: req.query.date || todayString,
-      summary: { schoolCount, activeStudents, sessionCount: sessions.length, schoolsWithSessions, submittedSessions: submitted, finalizedSessions: finalized, ...attendanceCounts },
-      schools: schoolRows,
-    }});
-  } catch (error) { next(error); }
+
+    const attendanceTotals = schoolRows.reduce((totals, school) => {
+      if (!school.attendanceAvailable) return totals;
+      totals.present += school.present;
+      totals.absent += school.absent;
+      return totals;
+    }, { present: 0, absent: 0 });
+    const submittedSessions = eligibleSessions.length;
+    const schoolsWithSessions = new Set(sessions.map((session) => String(session.schoolId))).size;
+
+    res.json({
+      success: true,
+      data: {
+        date: requestedDate,
+        summary: {
+          schoolCount: schools.length,
+          activeStudents: schoolRows.reduce((total, school) => total + school.registeredStudents, 0),
+          sessionCount: sessions.length,
+          schoolsWithSessions,
+          submittedSessions,
+          finalizedSessions: sessions.filter((session) => session.status === "finalized").length,
+          pendingSessions: sessions.filter((session) => !["submitted", "finalized"].includes(session.status)).length,
+          ...attendanceTotals,
+        },
+        schools: schoolRows,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 const schoolDetail = async (req, res, next) => {
