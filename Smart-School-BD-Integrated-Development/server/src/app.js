@@ -60,6 +60,33 @@ app.use(cors({
 // Request body parsing
 app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: true, limit: "100kb" }));
+
+// Temporary diagnostic logging for face enrollment requests.
+// Never log request bodies, biometric descriptors or credentials.
+app.use((req, res, next) => {
+  if (!req.path.startsWith("/api/face/enroll")) {
+    return next();
+  }
+
+  const startedAt = Date.now();
+
+  console.info("[FACE_REQUEST]", {
+    method: req.method,
+    path: req.path,
+  });
+
+  res.on("finish", () => {
+    console.info("[FACE_RESPONSE]", {
+      method: req.method,
+      path: req.path,
+      statusCode: res.statusCode,
+      durationMs: Date.now() - startedAt,
+    });
+  });
+
+  next();
+});
+
 // Serve face recognition models
 const path = require("path");
 
