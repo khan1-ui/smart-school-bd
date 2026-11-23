@@ -2,6 +2,8 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("./User");
 const School = require("../schools/School");
+const crypto = require("crypto");
+const RefreshSession = require("./RefreshSession");
 
 class AppError extends Error {
   constructor(message, statusCode) { super(message); this.name = "AppError"; this.statusCode = statusCode; }
@@ -13,6 +15,54 @@ const createAccessToken = (user) => {
   const payload = { sub: user._id.toString(), role: user.role };
   if (user.schoolId) payload.schoolId = user.schoolId.toString();
   return jwt.sign(payload, secret, { expiresIn: "15m" });
+};
+
+const REFRESH_TOKEN_TTL_DAYS = 30;
+const hashRefreshToken = (token) =>
+  crypto.createHash("sha256").update(token).digest("hex");
+
+const createRefreshSession = async (user, metadata = {}) => {
+  const rawToken = crypto.randomBytes(48).toString("base64url");
+  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
+  await RefreshSession.create({
+    userId: user._id,
+    tokenHash: hashRefreshToken(rawToken),
+    expiresAt,
+    userAgent: String(metadata.userAgent || "").slice(0, 300),
+  });
+  return { refreshToken: rawToken, expiresAt };
+};
+
+const rotateRefreshSession = async (rawToken, metadata = {}) => {
+  if (!rawToken || typeof rawToken !== "string" || rawToken.length > 256) {
+    throw new AppError("সেশন মেয়াদ শেষ হয়েছে। আবার লগইন করুন।", 401);
+  }
+  const tokenHash = hashRefreshToken(rawToken);
+  const session = await RefreshSession.findOne({ tokenHash }).select("+tokenHash");
+  if (!session || session.expiresAt <= new Date()) {
+    if (session) await RefreshSession.deleteOne({ _id: session._id });
+    throw new AppError("সেশন মেয়াদ শেষ হয়েছে। আবার লগইন করুন।", 401);
+  }
+
+  const user = await User.findOne({ _id: session.userId, status: "active" });
+  if (!user) {
+    await RefreshSession.deleteOne({ _id: session._id });
+    throw new AppError("অ্যাকাউন্টটি সক্রিয় নেই। আবার লগইন করুন।", 401);
+  }
+
+  // Consume the old refresh token before issuing a replacement.
+  await RefreshSession.deleteOne({ _id: session._id });
+  const replacement = await createRefreshSession(user, metadata);
+  return {
+    accessToken: createAccessToken(user),
+    refreshToken: replacement.refreshToken,
+    refreshExpiresAt: replacement.expiresAt,
+  };
+};
+
+const revokeRefreshSession = async (rawToken) => {
+  if (!rawToken || typeof rawToken !== "string") return;
+  await RefreshSession.deleteOne({ tokenHash: hashRefreshToken(rawToken) });
 };
 
 
@@ -109,10 +159,13 @@ const loginUser = async ({ schoolCode = "", email, password, centralOffice = fal
   user.lastLoginAt = new Date();
   await user.save();
   const accessToken = createAccessToken(user);
+  const refreshSession = await createRefreshSession(user);
   const school = user.schoolId ? await School.findById(user.schoolId).select("name schoolCode division district upazila").lean() : null;
 
   return {
     accessToken,
+    refreshToken: refreshSession.refreshToken,
+    refreshExpiresAt: refreshSession.expiresAt,
     user: {
       id: user._id, name: user.name, email: user.email, schoolId: user.schoolId || null,
       role: user.role, designation: user.designation, indexNumber: user.indexNumber, teacherCode: user.teacherCode,
@@ -127,4 +180,7 @@ const listActiveTeachers = async (schoolId) => {
     .sort({ name: 1 }).lean();
 };
 
-module.exports = { AppError, applyForTeacherAccount, listPendingTeachers, listActiveTeachers, reviewTeacherApplication, loginUser };
+module.exports = {
+  AppError, applyForTeacherAccount, listPendingTeachers, listActiveTeachers,
+  reviewTeacherApplication, loginUser, rotateRefreshSession, revokeRefreshSession,
+};

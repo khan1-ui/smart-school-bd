@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, RefreshCw, Search, MapPin, Radio } from "lucide-react";
+import { AlertCircle, RefreshCw, Search, MapPin, Radio, Maximize2, Minimize2 } from "lucide-react";
 import { api } from "../lib/api";
 import StatCard from "../components/StatCard";
 
@@ -25,6 +25,7 @@ export default function CentralDashboard() {
   const [refreshing,setRefreshing]=useState(false);
   const [error,setError]=useState("");
   const [lastUpdated,setLastUpdated]=useState(null);
+  const [isMonitorFullscreen,setIsMonitorFullscreen]=useState(false);
 
   const load=useCallback(async ({silent=false}={})=>{
     if(silent) setRefreshing(true); else setLoading(true);
@@ -69,6 +70,26 @@ export default function CentralDashboard() {
     {label:"হাজিরা সাবমিশন",value:monitoring?.submittedSessions ?? "—",icon:"alert",helper:`মোট সেশন ${monitoring?.sessionCount ?? "—"} · অপেক্ষমাণ ${monitoring?.pendingSessions ?? "—"}`},
   ];
 
+  useEffect(()=>{
+    const syncFullscreen=()=>setIsMonitorFullscreen(document.fullscreenElement===document.getElementById("central-school-monitor"));
+    document.addEventListener("fullscreenchange",syncFullscreen);
+    return ()=>document.removeEventListener("fullscreenchange",syncFullscreen);
+  },[]);
+
+  const toggleMonitorFullscreen=async()=>{
+    const monitorElement=document.getElementById("central-school-monitor");
+    if(!monitorElement) return;
+    try{
+      if(document.fullscreenElement===monitorElement){
+        await document.exitFullscreen();
+      }else if(!document.fullscreenElement){
+        await monitorElement.requestFullscreen();
+      }
+    }catch(err){
+      setError("এই ব্রাউজারে পূর্ণ স্ক্রিন চালু করা যায়নি। ব্রাউজারের Fullscreen অনুমতি পরীক্ষা করুন।");
+    }
+  };
+
   const reset=()=>{setQuery("");setDivision("");setDistrict("");setUpazila("");setSchoolCode("");};
   const numberOrDash=(value)=>value===null||value===undefined?"—":value;
 
@@ -81,7 +102,7 @@ export default function CentralDashboard() {
       {cards.map(item=><StatCard key={item.label} item={item}/>) }
     </section>
 
-    <section className="flag-card min-w-0 overflow-hidden">
+    <section id="central-school-monitor" className={`flag-card min-w-0 overflow-hidden ${isMonitorFullscreen ? "h-screen overflow-y-auto rounded-none p-5 md:p-7" : ""}`}>
       <div className="flex flex-col gap-3 border-b border-white/20 pb-5 xl:flex-row xl:items-center xl:justify-between">
         <div><h2 className="font-bold text-white">নিবন্ধিত স্কুল মনিটরিং</h2><p className="mt-1 text-sm text-brand-100">কেন্দ্রীয় অনুমোদিত স্কুলের তালিকা ও এলাকাভিত্তিক অনুসন্ধান</p></div>
         <button type="button" className="secondary-button shrink-0" onClick={reset}><RefreshCw size={15}/> ফিল্টার রিসেট</button>
@@ -115,6 +136,12 @@ export default function CentralDashboard() {
         </table>
       </div>
       <p className="mt-3 text-xs leading-5 text-brand-100">নির্বাচিত তারিখের Asia/Dhaka হিসাব। হাজিরা সাবমিট না হলে উপস্থিতি ও অনুপস্থিতি দেখানো হয় না। বর্তমান সংস্করণে প্রতি ১৫ সেকেন্ডে সার্ভার থেকে তথ্য রিফ্রেশ হয়।</p>
+      <div className="mt-4 flex justify-center">
+        <button type="button" onClick={toggleMonitorFullscreen} className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/70" aria-label={isMonitorFullscreen?"স্বাভাবিক পর্দায় ফিরুন":"মনিটরিং অংশ পূর্ণ স্ক্রিনে দেখুন"}>
+          {isMonitorFullscreen?<Minimize2 size={14}/>:<Maximize2 size={14}/>}
+          {isMonitorFullscreen?"স্বাভাবিক পর্দায় ফিরুন":"পূর্ণ স্ক্রিনে দেখুন"}
+        </button>
+      </div>
     </section>
   </div>;
 }

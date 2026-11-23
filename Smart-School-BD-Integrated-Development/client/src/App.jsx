@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { api } from "./lib/api";
 import { CalendarDays, Menu, ShieldCheck, Wifi, LogOut } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import CentralDashboard from "./pages/CentralDashboard";
@@ -28,6 +29,43 @@ const pageTitles = {
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const restoreSession = async () => {
+      const token = sessionStorage.getItem("ssbd_access_token");
+      if (!token) { if (active) setAuthReady(true); return; }
+      try {
+        const { data } = await api.get("/auth/me");
+        if (active) {
+          setUser(data.data.user);
+          sessionStorage.setItem("ssbd_user", JSON.stringify(data.data.user));
+          const savedPage = sessionStorage.getItem("ssbd_current_page");
+          if (savedPage) setPage(savedPage);
+        }
+      } catch (error) {
+        sessionStorage.removeItem("ssbd_access_token");
+    sessionStorage.removeItem("ssbd_user");
+    sessionStorage.removeItem("ssbd_current_page");
+        sessionStorage.removeItem("ssbd_user");
+        sessionStorage.removeItem("ssbd_current_page");
+        if (active) setUser(null);
+      } finally { if (active) setAuthReady(true); }
+    };
+    restoreSession();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setUser(null);
+      setPage("central");
+    };
+    window.addEventListener("ssbd:auth-expired", handleAuthExpired);
+    return () => window.removeEventListener("ssbd:auth-expired", handleAuthExpired);
+  }, []);
+
   const [page, setPage] = useState("central");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const role = user?.role === "central_office" ? "central" : user?.role === "teacher" ? "teacher" : "admin";
@@ -35,19 +73,26 @@ export default function App() {
 
   const login = (nextUser) => {
     setUser(nextUser);
-    setPage(nextUser.role === "central_office" ? "central" : nextUser.role === "teacher" ? "attendance" : "school");
+    sessionStorage.setItem("ssbd_user", JSON.stringify(nextUser));
+    const nextPage = nextUser.role === "central_office" ? "central" : nextUser.role === "teacher" ? "attendance" : "school";
+    setPage(nextPage);
+    sessionStorage.setItem("ssbd_current_page", nextPage);
   };
-  const logout = () => {
+  const logout = async () => {
+    try { await api.post("/auth/logout"); } catch { /* Local logout must still complete. */ }
     sessionStorage.removeItem("ssbd_access_token");
+    sessionStorage.removeItem("ssbd_user");
+    sessionStorage.removeItem("ssbd_current_page");
     setUser(null);
     setPage("central");
   };
 
+  if (!authReady) return <div className="min-h-screen grid place-items-center bg-[#f4f8f5] text-sm text-slate-600">সেশন যাচাই করা হচ্ছে...</div>;
   if (!user) return <AuthPage onLogin={login} />;
 
   return <div className="min-h-screen border-t-4 border-flag-red bg-[#f4f8f5] text-[#17352a]">
     <div className="flex min-h-screen">
-      <Sidebar role={role} page={page} setPage={setPage} open={sidebarOpen} setOpen={setSidebarOpen} />
+      <Sidebar role={role} page={page} setPage={(nextPage) => { setPage(nextPage); sessionStorage.setItem("ssbd_current_page", nextPage); }} open={sidebarOpen} setOpen={setSidebarOpen} />
       <div className="min-w-0 flex-1">
         <header className="sticky top-0 z-30 flex h-[76px] items-center justify-between border-b border-slate-200 border-t-2 border-t-brand-700 bg-white/95 px-4 backdrop-blur sm:px-6 xl:px-8">
           <div className="flex min-w-0 items-center gap-3">
