@@ -19,6 +19,8 @@ const {
 } = require("./middlewares/errorMiddleware");
 
 const app = express();
+// Trust Render's reverse proxy (one hop).
+app.set("trust proxy", 1);
 
 // Security headers
 
