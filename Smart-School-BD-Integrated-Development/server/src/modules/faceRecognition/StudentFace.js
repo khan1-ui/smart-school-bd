@@ -23,6 +23,7 @@ const studentFaceSchema = new mongoose.Schema(
     descriptor: {
       type: [Number],
       required: false,
+      default: undefined,
       validate: {
         validator(value) {
           if (value === undefined || value === null) return true;
