@@ -22,9 +22,20 @@ const errorHandler = (err, req, res, next) => {
     ? err.statusCode
     : 500;
 
-  if (process.env.NODE_ENV !== "production") {
-    console.error(err);
-  }
+  // Safe production error logging.
+  // Never log request bodies, passwords, tokens or secrets.
+  console.error("[API_ERROR]", {
+    method: req.method,
+    path: req.originalUrl.split("?")[0],
+    statusCode,
+    errorName: err.name,
+    errorCode: err.code || null,
+    message: err.message,
+    timestamp: new Date().toISOString(),
+    ...(process.env.NODE_ENV !== "production"
+      ? { stack: err.stack }
+      : {}),
+  });
 
   res.status(statusCode).json({
     success: false,
@@ -35,4 +46,7 @@ const errorHandler = (err, req, res, next) => {
   });
 };
 
-module.exports = { notFound, errorHandler };
+module.exports = {
+  notFound,
+  errorHandler,
+};
